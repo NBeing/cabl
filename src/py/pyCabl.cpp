@@ -84,7 +84,7 @@ public:
 static void writeToDisplay(Canvas& self_, object buffer)
 {
   PyObject* pyBuffer = buffer.ptr();
-  if (!PyBuffer_Check(pyBuffer))
+  if (!PyObject_CheckBuffer(pyBuffer))
   {
     // raise TypeError using standard boost::python mechanisms
   }
@@ -155,7 +155,7 @@ list enumerateDevices()
 BOOST_PYTHON_MODULE(pycabl)
 {
   Py_Initialize();
-  PyEval_InitThreads();
+  // PyEval_InitThreads(); // Deprecated in Python 3.9+
 
   //------------------------------------------------------------------------------------------------
 

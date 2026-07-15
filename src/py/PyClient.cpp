@@ -65,7 +65,7 @@ PyClient::PyClient(
   , m_onRender(fnRender_)
   , m_onDisconnected(fnDisconnected_)
 {
-  PyEval_InitThreads();
+  // PyEval_InitThreads(); // Deprecated in Python 3.9+
 }
 
 //--------------------------------------------------------------------------------------------------

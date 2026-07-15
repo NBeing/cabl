@@ -1,3 +1,4 @@
+#include <cstdint>
 /*
         ##########    Copyright (C) 2015 Vincenzo Pacella
         ##      ##    Distributed under MIT license, see file LICENSE
