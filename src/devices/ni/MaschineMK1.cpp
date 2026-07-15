@@ -461,6 +461,12 @@ bool MaschineMK1::sendFrame(uint8_t displayIndex_)
   for (uint8_t chunk = 1; chunk < m_displays[displayIndex_].numberOfChunks() - 1; chunk++)
   {
     offset += dataSize;
+    // Chunk writes come in back-to-back with zero pacing (both displays'
+    // frames get pushed in the same tick() when both are dirty - ~44 writes
+    // total). Without a breather the display controller's receive buffer
+    // saturates and NAKs; on this hardware that showed up as a 100%
+    // reproducible timeout on display 1's second chunk, every single call.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     if (!writeToDeviceHandle(
           Transfer({d, 0x01, 0xF6}, m_displays[displayIndex_].buffer() + offset, dataSize),
           kMASMK1_epDisplay))

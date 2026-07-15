@@ -50,6 +50,12 @@ private:
   lv_indev_t* m_pEncoderIndev{nullptr};
   lv_obj_t* m_pFirstItem{nullptr};
 
+  // The MK1 encoder fires more than one raw tick per physical detent, so a
+  // 1:1 mapping made the menu feel twitchy - require a few raw ticks per
+  // menu step instead. Raise/lower to tune feel.
+  static constexpr int kRawTicksPerStep = 3;
+  int m_rawTicks{0};
+
   int16_t m_encDiff{0};
   lv_indev_state_t m_selectState{LV_INDEV_STATE_RELEASED};
 };

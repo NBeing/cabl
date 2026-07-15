@@ -7,6 +7,7 @@
 
 #include "LvglMenu.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <sys/time.h>
 
@@ -171,10 +172,14 @@ void LvglMenu::buttonChanged(Device::Button button_, bool buttonState_, bool)
 
 void LvglMenu::encoderChanged(unsigned encoder_, bool valueIncreased_, bool)
 {
-  std::cout << "encoder #" << encoder_ << (valueIncreased_ ? " ++" : " --") << std::endl;
   if (encoder_ == kMenuEncoderIndex)
   {
-    m_encDiff += valueIncreased_ ? 1 : -1;
+    m_rawTicks += valueIncreased_ ? 1 : -1;
+    if (std::abs(m_rawTicks) >= kRawTicksPerStep)
+    {
+      m_encDiff += (m_rawTicks > 0) ? 1 : -1;
+      m_rawTicks = 0;
+    }
   }
   requestDeviceUpdate();
 }

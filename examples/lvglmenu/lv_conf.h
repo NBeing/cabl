@@ -79,11 +79,13 @@
 
 /*Default display refresh period. LVG will redraw changed areas with this period time*/
 /* MK1's display protocol is a genuinely slow serial USB write (a full
- * refresh is several sequential ~500-byte transfers) - the LVGL default of
- * 15ms outruns what it can physically transmit per frame, causing writes to
- * pile up, time out, and corrupt whatever mid-frame state was in flight.
- * 120ms gives it real headroom. */
-#define LV_DISP_DEF_REFR_PERIOD 120     /*[ms]*/
+ * refresh is ~22 sequential ~500-byte transfers per display, 44 when both
+ * displays redraw in the same tick). The real fix for write timeouts was
+ * inter-chunk pacing in MaschineMK1::sendFrame() (the device's receive
+ * buffer was saturating from zero-delay back-to-back writes) - this period
+ * just caps how often LVGL asks for a redraw, so it can come back down from
+ * the earlier over-cautious 120ms (8fps) now that the real bug is fixed. */
+#define LV_DISP_DEF_REFR_PERIOD 40     /*[ms]*/
 
 /*Input device read period in milliseconds*/
 #define LV_INDEV_DEF_READ_PERIOD 50     /*[ms]*/
