@@ -137,6 +137,13 @@ ButtonDebug::ButtonDebug() : m_rng(std::random_device{}())
 
 void ButtonDebug::initDevice()
 {
+  for (const auto& descriptor : Coordinator::instance().enumerate())
+  {
+    std::cout << "device: " << descriptor.name() << " ["
+               << DeviceDescriptor::toString(descriptor.type()) << " " << std::hex
+               << descriptor.vendorId() << ":" << descriptor.productId() << std::dec
+               << " s/n=" << descriptor.serialNumber() << "]" << std::endl;
+  }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -174,6 +181,18 @@ void ButtonDebug::buttonChanged(Device::Button button_, bool buttonState_, bool 
     }
     logEvent(std::string("button  DisplayButton2 = ") + (buttonState_ ? "1" : "0")
       + "  [screensaver " + (m_mode == Mode::Screensaver ? "ON]" : "OFF]"));
+    requestDeviceUpdate();
+    return;
+  }
+
+  if (button_ == Device::Button::DisplayButton3)
+  {
+    if (buttonState_)
+    {
+      m_mode = (m_mode == Mode::CanvasTest) ? Mode::Ramp : Mode::CanvasTest;
+    }
+    logEvent(std::string("button  DisplayButton3 = ") + (buttonState_ ? "1" : "0")
+      + "  [canvas test " + (m_mode == Mode::CanvasTest ? "ON]" : "OFF]"));
     requestDeviceUpdate();
     return;
   }
@@ -264,6 +283,32 @@ void ButtonDebug::renderAllLit()
 
 //--------------------------------------------------------------------------------------------------
 
+void ButtonDebug::renderCanvasTest()
+{
+  const Color kWhite(0xff);
+
+  // Display 0: outline primitives.
+  Canvas* outline = device()->graphicDisplay(0);
+  outline->black();
+  outline->rectangle(4, 4, 60, 50, kWhite);
+  outline->circle(100, 30, 22, kWhite);
+  outline->triangle(140, 55, 165, 5, 190, 55, kWhite);
+  outline->lineHorizontal(200, 30, 50, kWhite);
+  outline->lineVertical(225, 5, 50, kWhite);
+
+  // Display 1: filled variants of the same shapes, so the two displays
+  // together demonstrate every primitive Canvas exposes but this project
+  // had never actually called (only putText, until now).
+  Canvas* filled = device()->graphicDisplay(1);
+  filled->black();
+  filled->rectangleFilled(4, 4, 60, 50, kWhite, kWhite);
+  filled->circleFilled(100, 30, 22, kWhite, kWhite);
+  filled->triangleFilled(140, 55, 165, 5, 190, 55, kWhite, kWhite);
+  filled->rectangleRoundedFilled(200, 4, 50, 50, 10, kWhite, kWhite);
+}
+
+//--------------------------------------------------------------------------------------------------
+
 void ButtonDebug::render()
 {
   if (m_allLit)
@@ -313,6 +358,13 @@ void ButtonDebug::render()
     }
   }
 
-  device()->graphicDisplay(0)->black();
-  device()->graphicDisplay(0)->putText(4, 24, m_lastEvent.c_str(), {0xff});
+  if (m_mode == Mode::CanvasTest)
+  {
+    renderCanvasTest();
+  }
+  else
+  {
+    device()->graphicDisplay(0)->black();
+    device()->graphicDisplay(0)->putText(4, 24, m_lastEvent.c_str(), {0xff});
+  }
 }

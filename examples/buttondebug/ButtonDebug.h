@@ -38,11 +38,13 @@ private:
   {
     Ramp,
     Screensaver,
+    CanvasTest,
   };
 
   void logEvent(const std::string& line_);
   void renderPads(unsigned phase_);
   void renderAllLit();
+  void renderCanvasTest();
 
   std::string m_lastEvent;
   std::unordered_map<uint8_t, std::chrono::steady_clock::time_point> m_lastPress;
