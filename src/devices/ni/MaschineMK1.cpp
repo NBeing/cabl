@@ -25,7 +25,7 @@ const uint8_t kMASMK1_epOut = 0x01;
 const uint8_t kMASMK1_epInputPads = 0x84;
 const uint8_t kMASMK1_epInputButtonsAndDials = 0x81;
 const uint8_t kMASMK1_defaultDisplaysBacklight = 0x5C;
-const unsigned kMASMK1_padThreshold = 200;
+const unsigned kMASMK1_padThreshold = 600;
 } // namespace
 
 //--------------------------------------------------------------------------------------------------
