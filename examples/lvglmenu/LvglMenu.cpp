@@ -15,7 +15,7 @@ namespace
 // Encoder index that drives menu navigation. MK1 has 11 encoders; which
 // physical knob this is hasn't been confirmed on hardware yet - console logs
 // the raw index on every turn so it's a one-line change once we know.
-const unsigned kMenuEncoderIndex = 0;
+const unsigned kMenuEncoderIndex = 1; // confirmed on hardware
 
 const unsigned kDisplayBufSize = 128 * 1024;
 

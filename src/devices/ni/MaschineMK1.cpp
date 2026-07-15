@@ -452,6 +452,8 @@ bool MaschineMK1::sendFrame(uint8_t displayIndex_)
         Transfer({d, 0x01, 0xF7, 0x5C}, m_displays[displayIndex_].buffer() + offset, dataSize),
         kMASMK1_epDisplay))
   {
+    M_LOG("[MaschineMK1] sendFrame(" << static_cast<int>(displayIndex_)
+                                     << "): first chunk failed");
     return false;
   }
 
@@ -463,6 +465,10 @@ bool MaschineMK1::sendFrame(uint8_t displayIndex_)
           Transfer({d, 0x01, 0xF6}, m_displays[displayIndex_].buffer() + offset, dataSize),
           kMASMK1_epDisplay))
     {
+      M_LOG("[MaschineMK1] sendFrame(" << static_cast<int>(displayIndex_) << "): chunk "
+                                       << static_cast<int>(chunk) << "/"
+                                       << static_cast<int>(m_displays[displayIndex_].numberOfChunks())
+                                       << " failed");
       return false;
     }
   }
@@ -473,6 +479,7 @@ bool MaschineMK1::sendFrame(uint8_t displayIndex_)
         Transfer({d, 0x01, 0x52}, m_displays[displayIndex_].buffer() + offset, 338),
         kMASMK1_epDisplay))
   {
+    M_LOG("[MaschineMK1] sendFrame(" << static_cast<int>(displayIndex_) << "): last chunk failed");
     return false;
   }
 
