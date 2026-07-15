@@ -9,6 +9,8 @@
 
 #include <thread>
 
+#include <RtMidi.h>
+
 #include "cabl/comm/Driver.h"
 #include "cabl/comm/Transfer.h"
 #include "cabl/util/Functions.h"
@@ -26,6 +28,52 @@ const uint8_t kMASMK1_epInputPads = 0x84;
 const uint8_t kMASMK1_epInputButtonsAndDials = 0x81;
 const uint8_t kMASMK1_defaultDisplaysBacklight = 0x5C;
 const unsigned kMASMK1_padThreshold = 600;
+
+// Pulls one complete MIDI message off the front of a raw byte stream, if one
+// is available yet. Skips stray non-status bytes and realtime/system bytes
+// (0xF0+) rather than trying to interpret them.
+//
+// Adapted from quasart/cabl's popCompleteMidiMsg (commit 3f55e2d), which had
+// two real bugs: `midi_buffer[0]&0x80 == 0` parses as `midi_buffer[0] & (0x80
+// == 0)` because == binds tighter than & in C++, making the skip condition
+// permanently false; and `msg_type & 0xC0` was used as a truthy mask instead
+// of a masked comparison, so it matched almost every status byte instead of
+// specifically Program Change.
+bool popCompleteMidiMsg(std::deque<uint8_t>& midiBuffer_, sl::cabl::tRawData& outMsg_)
+{
+  while (!midiBuffer_.empty()
+         && ((midiBuffer_[0] & 0x80) == 0        // not a status byte yet - skip
+             || (midiBuffer_[0] & 0xF0) == 0xF0)) // system/realtime - not handled here
+  {
+    midiBuffer_.pop_front();
+  }
+
+  if (midiBuffer_.empty())
+  {
+    return false;
+  }
+
+  uint8_t statusByte = midiBuffer_[0];
+  uint8_t expectedSize = 3;
+  if ((statusByte & 0xF0) == 0xC0    // Program Change
+      || (statusByte & 0xF0) == 0xD0) // Channel Pressure
+  {
+    expectedSize = 2;
+  }
+
+  if (midiBuffer_.size() < expectedSize)
+  {
+    return false; // wait for the rest of the message
+  }
+
+  outMsg_.clear();
+  for (size_t i = 0; i < expectedSize; i++)
+  {
+    outMsg_.push_back(midiBuffer_.front());
+    midiBuffer_.pop_front();
+  }
+  return true;
+}
 } // namespace
 
 //--------------------------------------------------------------------------------------------------
@@ -161,6 +209,29 @@ enum class MaschineMK1::Button : uint8_t
 MaschineMK1::MaschineMK1()
 {
   m_leds.resize(kMASMK1_ledsDataSize);
+
+  try
+  {
+    m_pVirtualMidiIn.reset(new RtMidiOut(RtMidi::UNSPECIFIED, "Maschine MK1"));
+    m_pVirtualMidiIn->openVirtualPort("Received MIDI IN");
+  }
+  catch (std::exception const& e)
+  {
+    M_LOG("[MaschineMK1] could not init virtual MIDI IN port: " << e.what());
+    m_pVirtualMidiIn.reset();
+  }
+
+  try
+  {
+    m_pVirtualMidiOut.reset(new RtMidiIn(RtMidi::UNSPECIFIED, "Maschine MK1"));
+    m_pVirtualMidiOut->ignoreTypes(false, false, false);
+    m_pVirtualMidiOut->openVirtualPort("send MIDI OUT");
+  }
+  catch (std::exception const& e)
+  {
+    M_LOG("[MaschineMK1] could not init virtual MIDI OUT port: " << e.what());
+    m_pVirtualMidiOut.reset();
+  }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -181,10 +252,46 @@ void MaschineMK1::setKeyLed(unsigned index_, const Color& color_)
 
 void MaschineMK1::sendMidiMsg(tRawData midiMsg_)
 {
-  uint8_t lengthH = (midiMsg_.size() >> 8) & 0xFF;
-  uint8_t lengthL = midiMsg_.size() & 0xFF;
-  writeToDeviceHandle(
-    Transfer({0x07, lengthH, lengthL}, midiMsg_.data(), midiMsg_.size()), kMASMK1_epOut);
+  m_midiOutQueue.push_back(std::move(midiMsg_));
+}
+
+//--------------------------------------------------------------------------------------------------
+
+bool MaschineMK1::getNextMidiOutMsg(tRawData& midiMsg_)
+{
+  if (!m_midiOutQueue.empty())
+  {
+    midiMsg_ = std::move(m_midiOutQueue.front());
+    m_midiOutQueue.pop_front();
+    return true;
+  }
+
+  if (m_pVirtualMidiOut)
+  {
+    m_pVirtualMidiOut->getMessage(&midiMsg_);
+    return !midiMsg_.empty();
+  }
+
+  return false;
+}
+
+//--------------------------------------------------------------------------------------------------
+
+bool MaschineMK1::writeMidiMsg()
+{
+  tRawData midiMsg_;
+  while (getNextMidiOutMsg(midiMsg_))
+  {
+    uint8_t lengthH = (midiMsg_.size() >> 8) & 0xFF;
+    uint8_t lengthL = midiMsg_.size() & 0xFF;
+    if (!writeToDeviceHandle(
+          Transfer({0x07, lengthH, lengthL}, midiMsg_.data(), midiMsg_.size()), kMASMK1_epOut))
+    {
+      M_LOG("[MaschineMK1] writeMidiMsg: error writing MIDI message");
+      return false;
+    }
+  }
+  return true;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -226,14 +333,17 @@ bool MaschineMK1::tick()
   {
     success = sendLeds();
   }
+  else if (state == 3)
+  {
+    success = writeMidiMsg();
+  }
 
   if (!success)
   {
-    std::string strStepName(state == 0 ? "sendFrame" : (state == 1 ? "read" : "sendLeds"));
-    M_LOG("[MaschineMK1] tick: error in step #" << state << " (" << strStepName << ")");
+    M_LOG("[MaschineMK1] tick: error in step #" << state);
   }
 
-  if (++state >= 3)
+  if (++state > 3)
   {
     state = 0;
   }
@@ -435,6 +545,25 @@ void MaschineMK1::processPads(const Transfer& input_)
         m_padsStatus[pad] = false;
         keyChanged(pad, 0.0, m_buttonStates[static_cast<uint8_t>(Button::Shift)]);
       }
+    }
+  }
+}
+
+//--------------------------------------------------------------------------------------------------
+
+void MaschineMK1::processMidiIn(const Transfer& input_)
+{
+  for (size_t i = 3; i < input_.size(); i++)
+  {
+    m_midiInBuffer.push_back(input_[i]);
+  }
+
+  tRawData msg;
+  while (popCompleteMidiMsg(m_midiInBuffer, msg))
+  {
+    if (m_pVirtualMidiIn)
+    {
+      m_pVirtualMidiIn->sendMessage(&msg);
     }
   }
 }
@@ -731,8 +860,7 @@ void MaschineMK1::cbRead(Transfer input_)
   }
   else if (input_[0] == 0x06)
   {
-    M_LOG("[MaschineMK1] read: received MIDI message");
-    //!\todo Add MIDI in parsing
+    processMidiIn(input_);
   }
 }
 

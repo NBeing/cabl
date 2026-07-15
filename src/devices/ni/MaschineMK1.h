@@ -8,11 +8,16 @@
 #pragma once
 
 #include <bitset>
+#include <deque>
+#include <memory>
 
 #include "cabl/comm/Transfer.h"
 #include "cabl/devices/Device.h"
 #include "cabl/devices/DeviceFactory.h"
 #include "gfx/displays/GDisplayMaschineMK1.h"
+
+class RtMidiIn;
+class RtMidiOut;
 
 namespace sl
 {
@@ -78,9 +83,13 @@ private:
   bool sendLeds();
   bool read();
 
+  bool getNextMidiOutMsg(tRawData& midiMsg_);
+  bool writeMidiMsg();
+
   void processPads(const Transfer&);
   void processButtons(const Transfer&);
   void processEncoders(const Transfer&);
+  void processMidiIn(const Transfer&);
 
   void setLedImpl(Led, const Color&);
   Led led(Device::Button) const noexcept;
@@ -106,6 +115,15 @@ private:
   bool m_isDirtyLedGroup0{true};
   bool m_isDirtyLedGroup1{true};
   bool m_encodersInitialized{false};
+
+  // Physical MIDI IN/OUT DIN ports, bridged to virtual ALSA/CoreMIDI ports so
+  // external MIDI gear connected to the MK1 shows up like any other MIDI
+  // device. Independent of Device::sendMidiMsg()'s direct callers - this is
+  // specifically about the hardware's own MIDI jacks.
+  std::deque<tRawData> m_midiOutQueue;
+  std::deque<uint8_t> m_midiInBuffer;
+  std::unique_ptr<RtMidiOut> m_pVirtualMidiIn;  // relays hardware MIDI IN outward
+  std::unique_ptr<RtMidiIn> m_pVirtualMidiOut;  // receives from apps, sent to hardware MIDI OUT
 };
 
 //--------------------------------------------------------------------------------------------------
