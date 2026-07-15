@@ -319,11 +319,13 @@ void Euklid::play()
       }
       if (m_sequences[i].next())
       {
-        /*      MidiMessage* m = new NoteOn(0, note.value(), 127);
-              NoteOn noteObj(0, note.value(), 127);
-              std::vector<uint8_t> msg(noteObj.data());
-              m_pMidiout->sendMessage(&msg);
-           //   device()->sendMidiMsg(msg);*/
+        NoteOn noteOn(MidiMessage::Channel::Ch1, note.getNoteValue(), 127);
+        std::vector<uint8_t> onMsg(noteOn.data());
+        m_pMidiout->sendMessage(&onMsg);
+
+        NoteOff noteOff(MidiMessage::Channel::Ch1, note.getNoteValue());
+        std::vector<uint8_t> offMsg(noteOff.data());
+        m_pMidiout->sendMessage(&offMsg);
       }
     }
   }
