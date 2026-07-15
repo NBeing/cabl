@@ -45,6 +45,13 @@ function (addRtMidi)
         COMPILE_DEFINITIONS __MACOSX_CORE__
     )
     endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+
+    if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+      find_package(ALSA REQUIRED)
+      target_compile_definitions(rtmidi PUBLIC __LINUX_ALSA__)
+      target_include_directories(rtmidi PUBLIC ${ALSA_INCLUDE_DIRS})
+      target_link_libraries(rtmidi PUBLIC ${ALSA_LIBRARIES} pthread)
+    endif()
   endif()
 endfunction()
 
