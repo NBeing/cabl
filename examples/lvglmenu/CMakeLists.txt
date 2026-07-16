@@ -30,6 +30,8 @@ SET(
     main.cpp
     LvglMenu.h
     LvglMenu.cpp
+    MenuUi.h
+    MenuUi.cpp
 )
 
 add_executable(${PROJECT_NAME} ${Examples_LvglMenu_FILES})
@@ -48,3 +50,32 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   target_link_libraries(${PROJECT_NAME} PUBLIC "-framework CoreFoundation" "-framework IOKit")
   target_link_libraries(${PROJECT_NAME} PUBLIC "-framework CoreAudio" "-framework CoreMidi" objc)
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+
+# ------------------------------------------------------------------------------------------------ #
+#  lvgl-menu-sim - terminal (Braille art) simulator, no MK1/USB hardware needed                    #
+#  Shares MenuUi with lvgl-menu above; deliberately does NOT link cabl-static, so this stays a      #
+#  lighter, hardware-independent binary for iterating on menu logic.                                #
+# ------------------------------------------------------------------------------------------------ #
+
+set(SIM_PROJECT_NAME lvgl-menu-sim)
+
+SET(
+  Examples_LvglMenuSim_FILES
+    main_sim.cpp
+    TerminalMenu.h
+    TerminalMenu.cpp
+    MenuUi.h
+    MenuUi.cpp
+)
+
+add_executable(${SIM_PROJECT_NAME} ${Examples_LvglMenuSim_FILES})
+
+set_target_properties(
+  ${SIM_PROJECT_NAME}
+  PROPERTIES
+    OUTPUT_NAME       ${SIM_PROJECT_NAME}
+    OUTPUT_NAME_DEBUG ${SIM_PROJECT_NAME}${DEBUG_SUFFIX}
+)
+
+target_link_libraries(${SIM_PROJECT_NAME} PRIVATE lvgl::lvgl)
+target_include_directories(${SIM_PROJECT_NAME} PRIVATE ${lvgl_SOURCE_DIR} .)
