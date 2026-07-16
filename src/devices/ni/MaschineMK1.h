@@ -14,6 +14,7 @@
 #include "cabl/comm/Transfer.h"
 #include "cabl/devices/Device.h"
 #include "cabl/devices/DeviceFactory.h"
+#include "cabl/threading/LockFreeQueue.h"
 #include "gfx/displays/GDisplayMaschineMK1.h"
 
 class RtMidiIn;
@@ -66,6 +67,16 @@ private:
   enum class Button : uint8_t;
   enum class Encoder : uint8_t;
 
+  // tick()'s round-robin step. MIDI-out isn't part of this anymore - it
+  // runs on its own dedicated thread (see init()) so a slow display refresh
+  // can't add jitter to it.
+  enum class TickStep : uint8_t
+  {
+    SendFrame,
+    Read,
+    SendLeds,
+  };
+
   static constexpr uint8_t kMASMK1_nDisplays = 2;
   static constexpr uint8_t kMASMK1_ledsDataSize = 62;
   static constexpr uint8_t kMASMK1_nButtons = 42;
@@ -75,6 +86,8 @@ private:
   static constexpr uint8_t kMASMK1_nPads = 16;
 
   static constexpr uint8_t kMASMK1_nEncoders = 11;
+
+  static constexpr size_t kMASMK1_midiOutQueueCapacity = 256;
 
   void init() override;
 
@@ -116,11 +129,18 @@ private:
   bool m_isDirtyLedGroup1{true};
   bool m_encodersInitialized{false};
 
+  TickStep m_tickStep{TickStep::SendFrame};
+
   // Physical MIDI IN/OUT DIN ports, bridged to virtual ALSA/CoreMIDI ports so
   // external MIDI gear connected to the MK1 shows up like any other MIDI
   // device. Independent of Device::sendMidiMsg()'s direct callers - this is
   // specifically about the hardware's own MIDI jacks.
-  std::deque<tRawData> m_midiOutQueue;
+  //
+  // m_midiOutQueue is lock-free rather than a plain std::deque because it's
+  // now genuinely cross-thread: sendMidiMsg() (the producer) can be called
+  // from whatever thread the client code runs on, while writeMidiMsg() (the
+  // consumer) runs on the dedicated MIDI thread started in init().
+  LockFreeQueue<tRawData, kMASMK1_midiOutQueueCapacity> m_midiOutQueue;
   std::deque<uint8_t> m_midiInBuffer;
   std::unique_ptr<RtMidiOut> m_pVirtualMidiIn;  // relays hardware MIDI IN outward
   std::unique_ptr<RtMidiIn> m_pVirtualMidiOut;  // receives from apps, sent to hardware MIDI OUT

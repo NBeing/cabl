@@ -218,6 +218,20 @@ void Device::controlChanged(unsigned potentiometer_, double value_, bool shiftPr
 
 //--------------------------------------------------------------------------------------------------
 
+void Device::startFastThread(std::chrono::microseconds period_, std::function<void()> tickFn_)
+{
+  m_fastThread.start(period_, std::move(tickFn_));
+}
+
+//--------------------------------------------------------------------------------------------------
+
+void Device::stopFastThread()
+{
+  m_fastThread.stop();
+}
+
+//--------------------------------------------------------------------------------------------------
+
 bool Device::onTick()
 {
   if (!hasDeviceHandle())
@@ -246,6 +260,7 @@ void Device::onConnect()
 void Device::onDisconnect()
 {
   m_connected = false;
+  stopFastThread();
   resetDeviceHandle();
   if (m_cbDisconnect)
   {

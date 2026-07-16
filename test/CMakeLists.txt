@@ -58,6 +58,7 @@ set(
   test_threading_SRCS
     threading/LockFreeQueue.cpp
     threading/RTSafeEventDistributor.cpp
+    threading/RTThreadRunner.cpp
 )
 
 source_group(""                  FILES ${test_SRCS})

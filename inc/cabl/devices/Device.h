@@ -21,6 +21,8 @@
 #include "cabl/comm/DeviceHandle.h"
 #include "cabl/devices/DeviceRegistrar.h"
 
+#include "cabl/threading/RTThreadRunner.h"
+
 #include "cabl/util/Color.h"
 
 namespace sl
@@ -294,6 +296,19 @@ protected:
 
   void controlChanged(unsigned potentiometer_, double value_, bool shiftPressed_);
 
+  //! Starts a dedicated background thread calling tickFn_ every period_,
+  //! decoupled from the Coordinator's tick()/render loop - for latency-
+  //! sensitive periodic I/O (e.g. MIDI output) that shouldn't be at the
+  //! mercy of whatever else the main tick happens to be blocked on (a slow
+  //! display refresh, for instance). Safe to call writeToDeviceHandle()/
+  //! readFromDeviceHandle() from tickFn_ - already synchronized against the
+  //! main tick thread via m_mtxDeviceHandle. No-op if already running.
+  void startFastThread(std::chrono::microseconds period_, std::function<void()> tickFn_);
+
+  //! Stops and joins the fast thread. Safe to call when not running, or
+  //! more than once.
+  void stopFastThread();
+
 private:
   bool onTick();
 
@@ -314,6 +329,8 @@ private:
 
   mutable std::mutex m_mtxDeviceHandle;
   tPtr<DeviceHandle> m_pDeviceHandle;
+
+  RTThreadRunner m_fastThread;
 
   friend class Coordinator;
 };

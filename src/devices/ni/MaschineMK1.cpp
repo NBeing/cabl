@@ -7,6 +7,7 @@
 
 #include "devices/ni/MaschineMK1.h"
 
+#include <chrono>
 #include <thread>
 
 #include <RtMidi.h>
@@ -252,17 +253,18 @@ void MaschineMK1::setKeyLed(unsigned index_, const Color& color_)
 
 void MaschineMK1::sendMidiMsg(tRawData midiMsg_)
 {
-  m_midiOutQueue.push_back(std::move(midiMsg_));
+  if (!m_midiOutQueue.enqueue(midiMsg_))
+  {
+    M_LOG("[MaschineMK1] sendMidiMsg: queue full, dropping message");
+  }
 }
 
 //--------------------------------------------------------------------------------------------------
 
 bool MaschineMK1::getNextMidiOutMsg(tRawData& midiMsg_)
 {
-  if (!m_midiOutQueue.empty())
+  if (m_midiOutQueue.dequeue(midiMsg_))
   {
-    midiMsg_ = std::move(m_midiOutQueue.front());
-    m_midiOutQueue.pop_front();
     return true;
   }
 
@@ -311,42 +313,38 @@ Canvas* MaschineMK1::graphicDisplay(size_t displayIndex_)
 
 bool MaschineMK1::tick()
 {
-  static int state = 0;
   bool success = true;
 
-  if (state == 0)
+  switch (m_tickStep)
   {
-    for (uint8_t displayIndex = 0; displayIndex < 2; displayIndex++)
-    {
-      if (m_displays[displayIndex].dirty())
+    case TickStep::SendFrame:
+      for (uint8_t displayIndex = 0; displayIndex < 2; displayIndex++)
       {
-        success = sendFrame(displayIndex);
-        m_displays[displayIndex].resetDirtyFlags();
+        if (m_displays[displayIndex].dirty())
+        {
+          success = sendFrame(displayIndex);
+          m_displays[displayIndex].resetDirtyFlags();
+        }
       }
-    }
-  }
-  else if (state == 1)
-  {
-    success = read();
-  }
-  else if (state == 2)
-  {
-    success = sendLeds();
-  }
-  else if (state == 3)
-  {
-    success = writeMidiMsg();
+      break;
+
+    case TickStep::Read:
+      success = read();
+      break;
+
+    case TickStep::SendLeds:
+      success = sendLeds();
+      break;
   }
 
   if (!success)
   {
-    M_LOG("[MaschineMK1] tick: error in step #" << state);
+    M_LOG("[MaschineMK1] tick: error in step #" << static_cast<int>(m_tickStep));
   }
 
-  if (++state > 3)
-  {
-    state = 0;
-  }
+  m_tickStep = (m_tickStep == TickStep::SendLeds) ? TickStep::SendFrame
+                                                   : static_cast<TickStep>(
+                                                       static_cast<uint8_t>(m_tickStep) + 1);
   return success;
 }
 
@@ -376,6 +374,12 @@ void MaschineMK1::init()
   m_leds[static_cast<uint8_t>(Led::DisplayBacklight)] = kMASMK1_defaultDisplaysBacklight;
   m_isDirtyLedGroup1 = true;
   sendLeds();
+
+  // MIDI-out gets its own thread rather than a slot in tick()'s round-robin
+  // above - sendFrame() can block this device's main tick thread for tens
+  // of milliseconds during a display refresh, which would otherwise become
+  // jitter on every outgoing MIDI message.
+  startFastThread(std::chrono::microseconds(1000), [this] { writeMidiMsg(); });
 }
 
 //--------------------------------------------------------------------------------------------------
