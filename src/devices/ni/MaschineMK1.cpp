@@ -338,7 +338,20 @@ bool MaschineMK1::tick()
         {
           CABL_TRACE_INSTANT("tick", displayIndex == 0 ? "display0 dirty" : "display1 dirty");
           success = sendFrame(displayIndex);
-          m_displays[displayIndex].resetDirtyFlags();
+          // Only clear the dirty flag on success. The occasional chunk write
+          // does hit a genuine ~50ms USB write timeout (confirmed via packet
+          // capture - transient, not a wedge: the very next attempt on that
+          // endpoint succeeds). Previously a failure cleared the flag
+          // unconditionally, so a stalled frame was just abandoned until
+          // some *other* content change happened to redraw it. Leaving it
+          // dirty lets this same tick loop's next SendFrame turn (after
+          // Read/SendLeds) retry for free - no added latency when things are
+          // healthy, self-heals within a couple of tick cycles when they're
+          // not.
+          if (success)
+          {
+            m_displays[displayIndex].resetDirtyFlags();
+          }
         }
         else
         {
