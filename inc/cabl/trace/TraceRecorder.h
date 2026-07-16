@@ -17,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace sl
@@ -100,6 +101,8 @@ public:
   //! here. Returns false if the file couldn't be opened.
   bool writeJson(const std::string& path_) const
   {
+    std::vector<Row> rows = gatherSortedRows();
+
     std::vector<const ThreadBuffer*> buffers;
     {
       std::lock_guard<std::mutex> lock(m_registryMtx);
@@ -108,30 +111,6 @@ public:
         buffers.push_back(buf.get());
       }
     }
-
-    struct Row
-    {
-      const TraceEvent* event;
-      std::size_t tid;
-    };
-
-    std::vector<Row> rows;
-    for (std::size_t tid = 0; tid < buffers.size(); tid++)
-    {
-      const auto* buf = buffers[tid];
-      std::size_t written = buf->writeIndex.load();
-      std::size_t count = (written < kEventsPerThread) ? written : kEventsPerThread;
-      for (std::size_t i = 0; i < count; i++)
-      {
-        rows.push_back({&buf->events[i], tid});
-      }
-    }
-
-    // Physical ring-buffer slot order isn't chronological once a buffer has
-    // wrapped - sort globally by timestamp so the output (and any B/E
-    // pairing within it) is well-formed regardless.
-    std::sort(rows.begin(), rows.end(),
-      [](const Row& a_, const Row& b_) { return a_.event->timestampUs < b_.event->timestampUs; });
 
     std::FILE* file = std::fopen(path_.c_str(), "w");
     if (!file)
@@ -156,6 +135,46 @@ public:
     return true;
   }
 
+  //! Quick human-readable counts by (category, name), most frequent first -
+  //! covering Instant and Begin events (so Begin/End scope pairs count
+  //! once, not twice). Meant as an at-a-glance companion to writeJson(),
+  //! not a replacement for actually looking at the timeline in Perfetto.
+  void printSummary(std::FILE* out_ = stdout) const
+  {
+    std::vector<Row> rows = gatherSortedRows();
+
+    std::vector<std::pair<std::string, std::size_t>> counts;
+    for (const auto& row : rows)
+    {
+      const auto& e = *row.event;
+      if (e.phase != TracePhase::Instant && e.phase != TracePhase::Begin)
+      {
+        continue;
+      }
+      std::string key =
+        std::string(e.category ? e.category : "") + " / " + (e.name ? e.name : "");
+      auto it = std::find_if(counts.begin(), counts.end(),
+        [&key](const std::pair<std::string, std::size_t>& kv_) { return kv_.first == key; });
+      if (it == counts.end())
+      {
+        counts.emplace_back(key, 1);
+      }
+      else
+      {
+        it->second++;
+      }
+    }
+
+    std::sort(counts.begin(), counts.end(),
+      [](const std::pair<std::string, std::size_t>& a_, const std::pair<std::string, std::size_t>& b_)
+      { return a_.second > b_.second; });
+
+    for (const auto& kv : counts)
+    {
+      std::fprintf(out_, "%8llu  %s\n", static_cast<unsigned long long>(kv.second), kv.first.c_str());
+    }
+  }
+
 private:
   struct ThreadBuffer
   {
@@ -163,6 +182,44 @@ private:
     std::array<TraceEvent, kEventsPerThread> events;
     std::atomic<std::size_t> writeIndex{0};
   };
+
+  struct Row
+  {
+    const TraceEvent* event;
+    std::size_t tid;
+  };
+
+  std::vector<Row> gatherSortedRows() const
+  {
+    std::vector<const ThreadBuffer*> buffers;
+    {
+      std::lock_guard<std::mutex> lock(m_registryMtx);
+      for (const auto& buf : m_threadBuffers)
+      {
+        buffers.push_back(buf.get());
+      }
+    }
+
+    std::vector<Row> rows;
+    for (std::size_t tid = 0; tid < buffers.size(); tid++)
+    {
+      const auto* buf = buffers[tid];
+      std::size_t written = buf->writeIndex.load();
+      std::size_t count = (written < kEventsPerThread) ? written : kEventsPerThread;
+      for (std::size_t i = 0; i < count; i++)
+      {
+        rows.push_back({&buf->events[i], tid});
+      }
+    }
+
+    // Physical ring-buffer slot order isn't chronological once a buffer has
+    // wrapped - sort globally by timestamp so the output (and any B/E
+    // pairing within it) is well-formed regardless.
+    std::sort(rows.begin(), rows.end(),
+      [](const Row& a_, const Row& b_) { return a_.event->timestampUs < b_.event->timestampUs; });
+
+    return rows;
+  }
 
   TraceRecorder() : m_startTime(std::chrono::steady_clock::now())
   {

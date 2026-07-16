@@ -10,6 +10,7 @@
 #include <thread>
 
 #include "DeviceHandleLibUSB.h"
+#include "cabl/trace/Trace.h"
 
 namespace
 {
@@ -115,6 +116,14 @@ DriverLibUSB::DriverLibUSB() : m_usbThreadRunning(true)
     m_pHotplugHandle);
 
   m_usbThread = std::thread([this]() {
+    // Debug note (debug/lvgl-menu-render-pacing branch): this loop has no
+    // pacing at all (not even yield()) - it spins calling
+    // libusb_handle_events() as fast as the scheduler allows, on top of
+    // Coordinator's own unthrottled tick loop. Named here so it shows up
+    // as its own track in trace output; not instrumented per-iteration
+    // since libusb_handle_events() itself is opaque to us and a per-call
+    // scope at this rate would flood the ring buffer.
+    CABL_TRACE_THREAD_NAME("LibUSB events");
     while (m_usbThreadRunning)
     {
       libusb_handle_events(m_pContext);

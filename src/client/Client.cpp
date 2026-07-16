@@ -7,6 +7,8 @@
 
 #include "cabl/client/Client.h"
 
+#include "cabl/trace/Trace.h"
+
 #include "devices/ableton/Push2.h"
 #include "devices/ableton/Push2Display.h"
 #include "devices/akai/Push.h"
@@ -111,10 +113,19 @@ void Client::onRender()
   bool expected = true;
   if (m_update.compare_exchange_weak(expected, false) && m_pDevice && m_pDevice->hasDeviceHandle())
   {
+    // Debug instrumentation (debug/lvgl-menu-render-pacing branch) - render()
+    // re-arms m_update unconditionally at the end (LvglMenu::render() ->
+    // requestDeviceUpdate()), and the Coordinator thread that drives this
+    // has no rate cap of its own (see Coordinator.cpp, paced only by
+    // yield()). This instant, paired with tick/SendFrame's own trace scopes,
+    // is meant to show empirically how often actual renders happen versus
+    // how often onRender() is just skipping/yielding.
+    CABL_TRACE_INSTANT("render", "render");
     render();
   }
   else
   {
+    CABL_TRACE_INSTANT("render", "skip");
     std::this_thread::yield();
   }
 }

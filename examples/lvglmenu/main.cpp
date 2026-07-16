@@ -37,7 +37,9 @@ int main(int argc, const char* argv[])
   // lifetime, so this dump is a best-effort snapshot rather than a fully
   // quiesced one (see TraceRecorder's class comment).
   TraceRecorder::instance().writeJson("lvgl-menu-trace.json");
-  std::cout << "Wrote lvgl-menu-trace.json - load it at ui.perfetto.dev" << std::endl;
+  std::cout << "Wrote lvgl-menu-trace.json - load it at ui.perfetto.dev\n\n"
+            << "Event counts:" << std::endl;
+  TraceRecorder::instance().printSummary();
 
   return 0;
 }

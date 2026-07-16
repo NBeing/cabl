@@ -328,6 +328,16 @@ private:
   tCbKeyChanged m_cbKeyChanged;
   tCbControlChanged m_cbControlChanged;
 
+  // Guards every m_cbX read/write, held for the full duration of an
+  // invocation (not just the copy) - button/encoder/key events arrive from
+  // DriverLibUSB's own I/O thread while render() arrives from Coordinator's
+  // thread, and Client::~Client() clears these from whichever thread is
+  // destroying it. Without serializing check-then-call against a concurrent
+  // clear, a callback can be invoked as an empty std::function mid-clear
+  // (std::bad_function_call, uncaught) - that's the segfault-on-quit this
+  // exists to close.
+  mutable std::mutex m_mtxCallbacks;
+
   mutable std::mutex m_mtxDeviceHandle;
   tPtr<DeviceHandle> m_pDeviceHandle;
 

@@ -13,6 +13,7 @@
 #include "cabl/gfx/TextDisplay.h"
 #include "cabl/gfx/LedArray.h"
 #include "cabl/gfx/LedMatrix.h"
+#include "cabl/trace/Trace.h"
 
 #include "gfx/displays/NullCanvas.h"
 #include "gfx/LedArrayDummy.h"
@@ -92,6 +93,7 @@ void Device::sendMidiMsg(tRawData)
 
 void Device::setCallbackDisconnect(tCbDisconnect cbDisconnect_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   m_cbDisconnect = cbDisconnect_;
 }
 
@@ -99,6 +101,7 @@ void Device::setCallbackDisconnect(tCbDisconnect cbDisconnect_)
 
 void Device::setCallbackRender(tCbRender cbRender_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   m_cbRender = cbRender_;
 }
 
@@ -106,6 +109,7 @@ void Device::setCallbackRender(tCbRender cbRender_)
 
 void Device::setCallbackButtonChanged(tCbButtonChanged cbButtonChanged_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   m_cbButtonChanged = cbButtonChanged_;
 }
 
@@ -113,6 +117,7 @@ void Device::setCallbackButtonChanged(tCbButtonChanged cbButtonChanged_)
 
 void Device::setCallbackEncoderChanged(tCbEncoderChanged cbEncoderChanged_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   m_cbEncoderChanged = cbEncoderChanged_;
 }
 
@@ -120,6 +125,7 @@ void Device::setCallbackEncoderChanged(tCbEncoderChanged cbEncoderChanged_)
 
 void Device::setCallbackKeyChanged(tCbKeyChanged cbKeyChanged_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   m_cbKeyChanged = cbKeyChanged_;
 }
 
@@ -127,6 +133,7 @@ void Device::setCallbackKeyChanged(tCbKeyChanged cbKeyChanged_)
 
 void Device::setCallbackControlChanged(tCbControlChanged cbControlChanged_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   m_cbControlChanged = cbControlChanged_;
 }
 
@@ -142,7 +149,13 @@ bool Device::hasDeviceHandle()
 
 bool Device::writeToDeviceHandle(const Transfer& transfer_, uint8_t endpoint_) const
 {
+  // Debug instrumentation (debug/lvgl-menu-render-pacing branch) - two
+  // nested scopes so a gap between "wait" Begin and "io" Begin shows lock
+  // contention (m_mtxDeviceHandle is shared with reads and the MIDI fast
+  // thread) separately from the actual libusb call's own duration.
+  CABL_TRACE_SCOPE("device", "write (incl. lock wait)");
   std::lock_guard<std::mutex> lock(m_mtxDeviceHandle);
+  CABL_TRACE_SCOPE("device", "write (post-lock io)");
 
   if (m_pDeviceHandle)
   {
@@ -156,7 +169,9 @@ bool Device::writeToDeviceHandle(const Transfer& transfer_, uint8_t endpoint_) c
 
 bool Device::readFromDeviceHandle(Transfer& transfer_, uint8_t endpoint_) const
 {
+  CABL_TRACE_SCOPE("device", "read (incl. lock wait)");
   std::lock_guard<std::mutex> lock(m_mtxDeviceHandle);
+  CABL_TRACE_SCOPE("device", "read (post-lock io)");
   if (m_pDeviceHandle)
   {
     return m_pDeviceHandle->read(transfer_, endpoint_);
@@ -180,6 +195,7 @@ void Device::readFromDeviceHandleAsync(uint8_t endpoint_, DeviceHandle::tCbRead 
 
 void Device::buttonChanged(Button button_, bool buttonState_, bool shiftPressed_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   if (m_cbButtonChanged)
   {
     m_cbButtonChanged(button_, buttonState_, shiftPressed_);
@@ -190,6 +206,7 @@ void Device::buttonChanged(Button button_, bool buttonState_, bool shiftPressed_
 
 void Device::encoderChanged(unsigned encoder_, bool valueIncreased_, bool shiftPressed_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   if (m_cbEncoderChanged)
   {
     m_cbEncoderChanged(encoder_, valueIncreased_, shiftPressed_);
@@ -200,6 +217,7 @@ void Device::encoderChanged(unsigned encoder_, bool valueIncreased_, bool shiftP
 
 void Device::keyChanged(unsigned index_, double value_, bool shiftPressed_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   if (m_cbKeyChanged)
   {
     m_cbKeyChanged(index_, value_, shiftPressed_);
@@ -210,6 +228,7 @@ void Device::keyChanged(unsigned index_, double value_, bool shiftPressed_)
 
 void Device::controlChanged(unsigned potentiometer_, double value_, bool shiftPressed_)
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   if (m_cbControlChanged)
   {
     m_cbControlChanged(potentiometer_, value_, shiftPressed_);
@@ -263,6 +282,7 @@ void Device::onDisconnect()
   m_connected = false;
   stopFastThread();
   resetDeviceHandle();
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   if (m_cbDisconnect)
   {
     m_cbDisconnect();
@@ -273,6 +293,7 @@ void Device::onDisconnect()
 
 void Device::render()
 {
+  std::lock_guard<std::mutex> lock(m_mtxCallbacks);
   if (m_cbRender)
   {
     m_cbRender();

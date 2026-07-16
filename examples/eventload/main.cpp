@@ -84,7 +84,9 @@ int main(int argc, char* argv[])
   harness.run();
 
   sl::cabl::TraceRecorder::instance().writeJson("event-load-trace.json");
-  std::cout << "\nWrote event-load-trace.json - load it at ui.perfetto.dev" << std::endl;
+  std::cout << "\nWrote event-load-trace.json - load it at ui.perfetto.dev\n\n"
+            << "Event counts:" << std::endl;
+  sl::cabl::TraceRecorder::instance().printSummary();
 
   return 0;
 }

@@ -329,10 +329,20 @@ bool MaschineMK1::tick()
       CABL_TRACE_SCOPE("tick", "SendFrame");
       for (uint8_t displayIndex = 0; displayIndex < 2; displayIndex++)
       {
+        // Debug instrumentation (debug/lvgl-menu-render-pacing branch) -
+        // distinguishing "genuinely dirty, full frame sent" from "checked,
+        // nothing to send" empirically answers whether the -7 write
+        // timeouts come from resending unchanged content every tick versus
+        // genuine content changes outrunning the USB link.
         if (m_displays[displayIndex].dirty())
         {
+          CABL_TRACE_INSTANT("tick", displayIndex == 0 ? "display0 dirty" : "display1 dirty");
           success = sendFrame(displayIndex);
           m_displays[displayIndex].resetDirtyFlags();
+        }
+        else
+        {
+          CABL_TRACE_INSTANT("tick", displayIndex == 0 ? "display0 clean" : "display1 clean");
         }
       }
       break;
@@ -890,6 +900,11 @@ Device::Button MaschineMK1::deviceButton(Button btn_) const noexcept
 
 void MaschineMK1::cbRead(Transfer input_)
 {
+  // Debug instrumentation (debug/lvgl-menu-render-pacing branch) - this
+  // runs on DriverLibUSB's own async-completion thread, independent of the
+  // Coordinator thread that drives SendFrame. Want its firing rate/duration
+  // alongside device/write timing to check for cross-thread USB contention.
+  CABL_TRACE_SCOPE("device", "cbRead");
   if (input_[0] == 0x02)
   {
     processEncoders(input_);
