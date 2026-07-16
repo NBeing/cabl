@@ -338,19 +338,28 @@ bool MaschineMK1::tick()
         {
           CABL_TRACE_INSTANT("tick", displayIndex == 0 ? "display0 dirty" : "display1 dirty");
           success = sendFrame(displayIndex);
-          // Only clear the dirty flag on success. The occasional chunk write
-          // does hit a genuine ~50ms USB write timeout (confirmed via packet
-          // capture - transient, not a wedge: the very next attempt on that
-          // endpoint succeeds). Previously a failure cleared the flag
-          // unconditionally, so a stalled frame was just abandoned until
-          // some *other* content change happened to redraw it. Leaving it
-          // dirty lets this same tick loop's next SendFrame turn (after
-          // Read/SendLeds) retry for free - no added latency when things are
-          // healthy, self-heals within a couple of tick cycles when they're
-          // not.
+          // Retry a failure on the next SendFrame turn rather than
+          // abandoning it immediately - a failed chunk write is often just a
+          // transient ~50ms USB timeout that clears on the very next attempt
+          // (confirmed via packet capture). But it isn't always transient:
+          // for some content it fails every single time, and retrying that
+          // forever collapsed the tick rate from thousands/sec to ~20/sec in
+          // practice. kMaxSendFrameRetries bounds it - after a few failed
+          // cycles in a row, give up and fall back to the original
+          // wait-for-new-content behavior instead of retrying indefinitely.
           if (success)
           {
             m_displays[displayIndex].resetDirtyFlags();
+            m_sendFrameFailCount[displayIndex] = 0;
+          }
+          else if (++m_sendFrameFailCount[displayIndex] >= kMaxSendFrameRetries)
+          {
+            M_LOG("[MaschineMK1] sendFrame(" << static_cast<int>(displayIndex)
+                                              << "): giving up after "
+                                              << static_cast<int>(kMaxSendFrameRetries)
+                                              << " consecutive failures");
+            m_displays[displayIndex].resetDirtyFlags();
+            m_sendFrameFailCount[displayIndex] = 0;
           }
         }
         else

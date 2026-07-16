@@ -116,6 +116,15 @@ private:
   bool isButtonPressed(const Transfer&, Button button_) const noexcept;
 
   GDisplayMaschineMK1 m_displays[kMASMK1_nDisplays];
+  // Consecutive sendFrame() failures per display, since a failure can be a
+  // transient ~50ms USB write timeout worth retrying (confirmed via packet
+  // capture - usually clears on the very next attempt) or, for some content,
+  // persistent - retrying that forever with no cap collapsed the tick rate
+  // from thousands/sec to ~20/sec in practice. kMaxSendFrameRetries bounds
+  // the damage: give up and fall back to the old abandon-and-wait-for-new-
+  // content behavior after a few failed cycles in a row.
+  static constexpr uint8_t kMaxSendFrameRetries = 3;
+  uint8_t m_sendFrameFailCount[kMASMK1_nDisplays]{};
   tRawData m_leds;
   tRawData m_buttons;
 
