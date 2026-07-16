@@ -8,6 +8,7 @@
 #pragma once
 
 #include "cabl/threading/LockFreeQueue.h"
+#include "cabl/trace/Trace.h"
 
 #include <algorithm>
 #include <atomic>
@@ -185,6 +186,8 @@ public:
       return;
     }
 
+    CABL_TRACE_INSTANT("rtbridge", "RT event");
+
     auto startTime = std::chrono::high_resolution_clock::now();
 
     for (auto observer : m_rtObservers)
@@ -223,6 +226,8 @@ public:
       return;
     }
 
+    CABL_TRACE_SCOPE("rtbridge", "UI drain");
+
     RTEvent event;
     int processedCount = 0;
 
@@ -236,6 +241,8 @@ public:
       m_uiEventsProcessed++;
       processedCount++;
     }
+
+    CABL_TRACE_COUNTER("rtbridge", "rtToUiQueueSize", static_cast<int32_t>(m_rtToUiQueue.size()));
   }
 
   //! Not RT-safe. Call from the UI thread to hand an event to the RT thread.

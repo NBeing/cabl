@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "cabl/trace/Trace.h"
+
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -40,8 +42,11 @@ public:
   RTThreadRunner& operator=(const RTThreadRunner&) = delete;
 
   //! Starts calling tickFn_ every period_ until stop() is called. No-op if
-  //! already running.
-  void start(std::chrono::microseconds period_, std::function<void()> tickFn_)
+  //! already running. name_ labels this thread's track in trace output
+  //! (see cabl/trace/Trace.h) - purely diagnostic, no effect when tracing
+  //! is compiled out.
+  void start(
+    std::chrono::microseconds period_, std::function<void()> tickFn_, const char* name_ = "RT Thread")
   {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true))
@@ -54,12 +59,16 @@ public:
     m_tickFn = std::move(tickFn_);
 
     m_thread = std::thread(
-      [this, period_]()
+      [this, period_, name_]()
       {
+        CABL_TRACE_THREAD_NAME(name_);
         auto nextTick = std::chrono::steady_clock::now();
         while (m_running.load(std::memory_order_relaxed))
         {
-          m_tickFn();
+          {
+            CABL_TRACE_SCOPE("thread", name_);
+            m_tickFn();
+          }
           nextTick += period_;
           std::this_thread::sleep_until(nextTick);
         }

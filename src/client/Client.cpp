@@ -38,6 +38,21 @@ Client::Client(DiscoveryPolicy discoveryPolicy_)
 
 Client::~Client()
 {
+  // onInitDevice() binds `this` into m_pDevice's callbacks - but m_pDevice
+  // is owned by Coordinator (a process-wide singleton whose background
+  // thread keeps polling it for the life of the process), so it can
+  // outlive this Client by a long way. Without clearing these, the very
+  // next tick after destruction calls back into a dangling `this`.
+  if (m_pDevice)
+  {
+    m_pDevice->setCallbackDisconnect(nullptr);
+    m_pDevice->setCallbackRender(nullptr);
+    m_pDevice->setCallbackButtonChanged(nullptr);
+    m_pDevice->setCallbackEncoderChanged(nullptr);
+    m_pDevice->setCallbackKeyChanged(nullptr);
+    m_pDevice->setCallbackControlChanged(nullptr);
+  }
+
   Coordinator::instance().unregisterClient(m_clientId);
 }
 

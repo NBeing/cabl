@@ -7,6 +7,8 @@
 
 #include "EventLoadHarness.h"
 
+#include <cabl/trace/Trace.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -43,6 +45,8 @@ void printUsage(const char* argv0_)
 
 int main(int argc, char* argv[])
 {
+  CABL_TRACE_THREAD_NAME("Main");
+
   sl::LoadHarnessConfig config;
 
   for (int i = 1; i < argc; i++)
@@ -79,6 +83,8 @@ int main(int argc, char* argv[])
   sl::EventLoadHarness harness(config);
   harness.run();
 
-  std::cout << std::endl;
+  sl::cabl::TraceRecorder::instance().writeJson("event-load-trace.json");
+  std::cout << "\nWrote event-load-trace.json - load it at ui.perfetto.dev" << std::endl;
+
   return 0;
 }

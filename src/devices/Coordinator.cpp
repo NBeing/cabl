@@ -11,6 +11,7 @@
 
 #include "cabl/cabl.h"
 #include "cabl/devices/DeviceFactory.h"
+#include "cabl/trace/Trace.h"
 #include "comm/drivers/LibUSB/DriverLibUSB.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -65,6 +66,7 @@ void Coordinator::run()
   }
 
   m_cablThread = std::thread([this]() {
+    CABL_TRACE_THREAD_NAME("Coordinator");
     while(!m_clientRegistered)
     {
       std::this_thread::yield();;
@@ -77,6 +79,7 @@ void Coordinator::run()
       {
         if (device.second)
         {
+          CABL_TRACE_SCOPE("coordinator", "onTick");
           device.second->onTick();
           //! \todo Check tick() result
         }

@@ -7,6 +7,8 @@
 
 #include "EventLoadHarness.h"
 
+#include <cabl/trace/Trace.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -46,6 +48,8 @@ EventLoadHarness::EventLoadHarness(const LoadHarnessConfig& config_) : m_config(
 
 void EventLoadHarness::rtProducerLoop()
 {
+  CABL_TRACE_THREAD_NAME("RT Producer");
+
   using Clock = std::chrono::steady_clock;
 
   const bool paced = m_config.rtEventsPerSecond > 0.0;

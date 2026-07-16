@@ -218,9 +218,10 @@ void Device::controlChanged(unsigned potentiometer_, double value_, bool shiftPr
 
 //--------------------------------------------------------------------------------------------------
 
-void Device::startFastThread(std::chrono::microseconds period_, std::function<void()> tickFn_)
+void Device::startFastThread(
+  std::chrono::microseconds period_, std::function<void()> tickFn_, const char* name_)
 {
-  m_fastThread.start(period_, std::move(tickFn_));
+  m_fastThread.start(period_, std::move(tickFn_), name_);
 }
 
 //--------------------------------------------------------------------------------------------------

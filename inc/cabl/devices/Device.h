@@ -303,7 +303,8 @@ protected:
   //! display refresh, for instance). Safe to call writeToDeviceHandle()/
   //! readFromDeviceHandle() from tickFn_ - already synchronized against the
   //! main tick thread via m_mtxDeviceHandle. No-op if already running.
-  void startFastThread(std::chrono::microseconds period_, std::function<void()> tickFn_);
+  void startFastThread(
+    std::chrono::microseconds period_, std::function<void()> tickFn_, const char* name_ = "RT Thread");
 
   //! Stops and joins the fast thread. Safe to call when not running, or
   //! more than once.

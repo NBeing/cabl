@@ -14,6 +14,7 @@
 
 #include "cabl/comm/Driver.h"
 #include "cabl/comm/Transfer.h"
+#include "cabl/trace/Trace.h"
 #include "cabl/util/Functions.h"
 
 #include "cabl/gfx/TextDisplay.h"
@@ -253,8 +254,13 @@ void MaschineMK1::setKeyLed(unsigned index_, const Color& color_)
 
 void MaschineMK1::sendMidiMsg(tRawData midiMsg_)
 {
-  if (!m_midiOutQueue.enqueue(midiMsg_))
+  if (m_midiOutQueue.enqueue(midiMsg_))
   {
+    CABL_TRACE_INSTANT("midi", "enqueue");
+  }
+  else
+  {
+    CABL_TRACE_INSTANT("midi", "enqueue dropped");
     M_LOG("[MaschineMK1] sendMidiMsg: queue full, dropping message");
   }
 }
@@ -284,6 +290,7 @@ bool MaschineMK1::writeMidiMsg()
   tRawData midiMsg_;
   while (getNextMidiOutMsg(midiMsg_))
   {
+    CABL_TRACE_SCOPE("midi", "send");
     uint8_t lengthH = (midiMsg_.size() >> 8) & 0xFF;
     uint8_t lengthL = midiMsg_.size() & 0xFF;
     if (!writeToDeviceHandle(
@@ -318,6 +325,8 @@ bool MaschineMK1::tick()
   switch (m_tickStep)
   {
     case TickStep::SendFrame:
+    {
+      CABL_TRACE_SCOPE("tick", "SendFrame");
       for (uint8_t displayIndex = 0; displayIndex < 2; displayIndex++)
       {
         if (m_displays[displayIndex].dirty())
@@ -327,14 +336,21 @@ bool MaschineMK1::tick()
         }
       }
       break;
+    }
 
     case TickStep::Read:
+    {
+      CABL_TRACE_SCOPE("tick", "Read");
       success = read();
       break;
+    }
 
     case TickStep::SendLeds:
+    {
+      CABL_TRACE_SCOPE("tick", "SendLeds");
       success = sendLeds();
       break;
+    }
   }
 
   if (!success)
@@ -379,7 +395,7 @@ void MaschineMK1::init()
   // above - sendFrame() can block this device's main tick thread for tens
   // of milliseconds during a display refresh, which would otherwise become
   // jitter on every outgoing MIDI message.
-  startFastThread(std::chrono::microseconds(1000), [this] { writeMidiMsg(); });
+  startFastThread(std::chrono::microseconds(1000), [this] { writeMidiMsg(); }, "MIDI Thread");
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -452,6 +468,11 @@ bool MaschineMK1::sendFrame(uint8_t displayIndex_)
   unsigned offset = 0;
   const unsigned dataSize = 502;
 
+  // Same breather as the mid-loop chunks below (see the comment there) -
+  // this first chunk can immediately follow the *other* display's last
+  // chunk within the same tick() (both dirty at once), with no gap at all
+  // otherwise.
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
   if (!writeToDeviceHandle(
         Transfer({d, 0x01, 0xF7, 0x5C}, m_displays[displayIndex_].buffer() + offset, dataSize),
         kMASMK1_epDisplay))
@@ -485,6 +506,7 @@ bool MaschineMK1::sendFrame(uint8_t displayIndex_)
 
   offset += dataSize;
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
   if (!writeToDeviceHandle(
         Transfer({d, 0x01, 0x52}, m_displays[displayIndex_].buffer() + offset, 338),
         kMASMK1_epDisplay))
@@ -578,6 +600,7 @@ void MaschineMK1::processMidiIn(const Transfer& input_)
   tRawData msg;
   while (popCompleteMidiMsg(m_midiInBuffer, msg))
   {
+    CABL_TRACE_INSTANT("midi", "received");
     if (m_pVirtualMidiIn)
     {
       m_pVirtualMidiIn->sendMessage(&msg);

@@ -48,6 +48,8 @@ option(COVERALLS_UPLOAD   "Upload the generated coveralls json" ON)
 option(CABL_TEST_ALL      "Generate test ouput for successful tests as well" OFF)
 option(CABL_TEST_JUNIT    "Generate a JUNIT xml test report" OFF)
 
+option(CABL_TRACE         "Build with Perfetto/Chrome-trace event instrumentation" ON)
+
 # Version ---------------------------------------------------------------------------------------- #
 
 string(TIMESTAMP CABL_BUILD_DATE "%Y-%m-%d")
@@ -490,6 +492,9 @@ if(BUILD_SHARED_LIBS AND NOT COVERALLS)
   target_include_directories( cabl PUBLIC ${LIBUSB_INCLUDE_DIRS} ${HIDAPI_INCLUDE_DIRS})
   target_include_directories( cabl PUBLIC ${RTMIDI_INCLUDE_DIRS} ${UNMIDIFY_INCLUDE_DIRS})
   target_include_directories( cabl PRIVATE src)
+  if(CABL_TRACE)
+    target_compile_definitions( cabl PUBLIC CABL_TRACE_ENABLED)
+  endif()
 
   if(LIBUSB_LOCAL_BUILD)
     target_link_libraries( cabl PUBLIC libusb)
@@ -526,6 +531,9 @@ if(BUILD_STATIC_LIBS)
   target_include_directories( cabl-static PUBLIC ${LIBUSB_INCLUDE_DIRS} ${HIDAPI_INCLUDE_DIRS})
   target_include_directories( cabl-static PUBLIC ${RTMIDI_INCLUDE_DIRS} ${UNMIDIFY_INCLUDE_DIRS})
   target_include_directories( cabl-static PRIVATE src)
+  if(CABL_TRACE)
+    target_compile_definitions( cabl-static PUBLIC CABL_TRACE_ENABLED)
+  endif()
 
   if(LIBUSB_LOCAL_BUILD)
     target_link_libraries( cabl-static PUBLIC libusb)

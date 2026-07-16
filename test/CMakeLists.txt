@@ -61,12 +61,18 @@ set(
     threading/RTThreadRunner.cpp
 )
 
+set(
+  test_trace_SRCS
+    trace/TraceRecorder.cpp
+)
+
 source_group(""                  FILES ${test_SRCS})
 source_group("comm"              FILES ${test_comm_SRCS})
 source_group("gfx"               FILES ${test_gfx_SRCS})
 source_group("gfx\\displays"     FILES ${test_gfx_displays_SRCS})
 source_group("util"              FILES ${test_util_SRCS})
 source_group("threading"          FILES ${test_threading_SRCS})
+source_group("trace"              FILES ${test_trace_SRCS})
 
 set(
   Test_FILES
@@ -76,6 +82,7 @@ set(
     ${test_gfx_displays_SRCS}
     ${test_util_SRCS}
     ${test_threading_SRCS}
+    ${test_trace_SRCS}
 )
 
 add_executable(
