@@ -15,6 +15,7 @@ add_subdirectory(euklid Euklid)
 add_subdirectory(knobdisplay KnobDisplay)
 add_subdirectory(buttondebug ButtonDebug)
 add_subdirectory(screentest ScreenTest)
+add_subdirectory(eventload EventLoad)
 # lvglmenu requires network access at configure time (CMake FetchContent
 # pulls LVGL from GitHub) - opt-in rather than always-on.
 option(CABL_BUILD_LVGL_MENU "Build the lvgl-menu example (fetches LVGL from GitHub)" ON)

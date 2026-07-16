@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <array>
 #include <atomic>
 #include <vector>
@@ -24,7 +25,7 @@ namespace cabl
 //! thread calling dequeue() concurrently - not safe for multiple producers
 //! or multiple consumers. One slot is always kept empty to distinguish a
 //! full buffer from an empty one, so capacity() is Capacity - 1.
-template <typename T, size_t Capacity>
+template <typename T, std::size_t Capacity>
 class LockFreeQueue
 {
 public:
@@ -36,8 +37,8 @@ public:
   //! Producer side. Returns false if the queue is full.
   bool enqueue(const T& item_)
   {
-    const size_t currentTail = m_tail.load(std::memory_order_relaxed);
-    const size_t nextTail = (currentTail + 1) % Capacity;
+    const std::size_t currentTail = m_tail.load(std::memory_order_relaxed);
+    const std::size_t nextTail = (currentTail + 1) % Capacity;
 
     if (nextTail == m_head.load(std::memory_order_acquire))
     {
@@ -52,7 +53,7 @@ public:
   //! Consumer side. Returns false if the queue is empty.
   bool dequeue(T& item_)
   {
-    const size_t currentHead = m_head.load(std::memory_order_relaxed);
+    const std::size_t currentHead = m_head.load(std::memory_order_relaxed);
 
     if (currentHead == m_tail.load(std::memory_order_acquire))
     {
@@ -71,24 +72,24 @@ public:
 
   //! Approximate - may be stale by the time the caller reads it if the other
   //! side of the queue is concurrently active.
-  size_t size() const
+  std::size_t size() const
   {
-    const size_t currentTail = m_tail.load(std::memory_order_acquire);
-    const size_t currentHead = m_head.load(std::memory_order_acquire);
+    const std::size_t currentTail = m_tail.load(std::memory_order_acquire);
+    const std::size_t currentHead = m_head.load(std::memory_order_acquire);
 
     return (currentTail >= currentHead) ? (currentTail - currentHead)
                                          : (Capacity - currentHead + currentTail);
   }
 
-  constexpr size_t capacity() const
+  constexpr std::size_t capacity() const
   {
     return Capacity - 1;
   }
 
 private:
   std::array<T, Capacity> m_buffer;
-  std::atomic<size_t> m_head{0};
-  std::atomic<size_t> m_tail{0};
+  std::atomic<std::size_t> m_head{0};
+  std::atomic<std::size_t> m_tail{0};
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -99,7 +100,7 @@ template <typename T>
 class LockFreeQueue<T, 0>
 {
 public:
-  explicit LockFreeQueue(size_t capacity_) : m_buffer(capacity_ + 1), m_capacity(capacity_ + 1)
+  explicit LockFreeQueue(std::size_t capacity_) : m_buffer(capacity_ + 1), m_capacity(capacity_ + 1)
   {
   }
 
@@ -108,8 +109,8 @@ public:
 
   bool enqueue(const T& item_)
   {
-    const size_t currentTail = m_tail.load(std::memory_order_relaxed);
-    const size_t nextTail = (currentTail + 1) % m_capacity;
+    const std::size_t currentTail = m_tail.load(std::memory_order_relaxed);
+    const std::size_t nextTail = (currentTail + 1) % m_capacity;
 
     if (nextTail == m_head.load(std::memory_order_acquire))
     {
@@ -123,7 +124,7 @@ public:
 
   bool dequeue(T& item_)
   {
-    const size_t currentHead = m_head.load(std::memory_order_relaxed);
+    const std::size_t currentHead = m_head.load(std::memory_order_relaxed);
 
     if (currentHead == m_tail.load(std::memory_order_acquire))
     {
@@ -140,25 +141,25 @@ public:
     return m_head.load(std::memory_order_acquire) == m_tail.load(std::memory_order_acquire);
   }
 
-  size_t size() const
+  std::size_t size() const
   {
-    const size_t currentTail = m_tail.load(std::memory_order_acquire);
-    const size_t currentHead = m_head.load(std::memory_order_acquire);
+    const std::size_t currentTail = m_tail.load(std::memory_order_acquire);
+    const std::size_t currentHead = m_head.load(std::memory_order_acquire);
 
     return (currentTail >= currentHead) ? (currentTail - currentHead)
                                          : (m_capacity - currentHead + currentTail);
   }
 
-  size_t capacity() const
+  std::size_t capacity() const
   {
     return m_capacity - 1;
   }
 
 private:
   std::vector<T> m_buffer;
-  std::atomic<size_t> m_head{0};
-  std::atomic<size_t> m_tail{0};
-  size_t m_capacity;
+  std::atomic<std::size_t> m_head{0};
+  std::atomic<std::size_t> m_tail{0};
+  std::size_t m_capacity;
 };
 
 //--------------------------------------------------------------------------------------------------

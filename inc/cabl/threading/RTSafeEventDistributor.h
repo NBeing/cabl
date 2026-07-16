@@ -268,6 +268,12 @@ public:
     }
   }
 
+  //! Usable capacity of each direction's queue (both are sized the same).
+  static constexpr std::size_t queueCapacity()
+  {
+    return kQueueSize - 1;
+  }
+
   struct Statistics
   {
     uint64_t rtEventsProcessed;
@@ -276,10 +282,10 @@ public:
     uint64_t uiEventsDropped;
     uint32_t maxRTProcessingTimeUs;
     uint32_t lastRTProcessingTimeUs;
-    size_t rtObserverCount;
-    size_t uiObserverCount;
-    size_t rtToUiQueueSize;
-    size_t uiToRtQueueSize;
+    std::size_t rtObserverCount;
+    std::size_t uiObserverCount;
+    std::size_t rtToUiQueueSize;
+    std::size_t uiToRtQueueSize;
   };
 
   Statistics getStatistics() const
@@ -318,7 +324,7 @@ public:
   static constexpr uint32_t kRTSafeThresholdUs = 100;
 
 private:
-  static constexpr size_t kQueueSize = 1024;
+  static constexpr std::size_t kQueueSize = 1024;
   static constexpr int kMaxUIEventsPerCall = 32;
   static constexpr int kMaxRTEventsPerCall = 16;
 
