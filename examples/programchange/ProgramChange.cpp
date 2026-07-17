@@ -26,22 +26,30 @@ void ProgramChange::initDevice()
   std::cout << "Connected. Sending on MIDI channel " << static_cast<int>(m_channel) << ".\n"
             << "Hold Erase to send a test Note On/Off (note " << static_cast<int>(kTestNote)
             << ") - basic sanity check that MIDI is reaching the synth at all.\n"
-            << "Turn encoder #" << kEncoderIndex
-            << " to pick a program (0-127), press Select or Play to send it.\n"
+            << "Turn encoder #" << kEncoderIndex << " to pick a program (0-127), or hold Shift and\n"
+            << "turn it to pick a bank (A-E). Press Select or Play to send Bank Select + Program Change.\n"
             << "Type 'q' and hit ENTER to quit." << std::endl;
 }
 
 //--------------------------------------------------------------------------------------------------
 
-void ProgramChange::encoderChanged(unsigned encoder_, bool valueIncreased_, bool /*shiftPressed_*/)
+void ProgramChange::encoderChanged(unsigned encoder_, bool valueIncreased_, bool shiftPressed_)
 {
   if (encoder_ != kEncoderIndex)
   {
     return;
   }
 
-  int next = static_cast<int>(m_program) + (valueIncreased_ ? 1 : -1);
-  m_program = static_cast<uint8_t>(std::max(0, std::min(127, next)));
+  if (shiftPressed_)
+  {
+    int next = static_cast<int>(m_bank) + (valueIncreased_ ? 1 : -1);
+    m_bank = static_cast<uint8_t>(std::max(0, std::min(static_cast<int>(kMaxBank), next)));
+  }
+  else
+  {
+    int next = static_cast<int>(m_program) + (valueIncreased_ ? 1 : -1);
+    m_program = static_cast<uint8_t>(std::max(0, std::min(127, next)));
+  }
   m_dirty = true;
   requestDeviceUpdate();
 }
@@ -65,16 +73,23 @@ void ProgramChange::buttonChanged(Device::Button button_, bool buttonState_, boo
 
 void ProgramChange::sendCurrentProgram()
 {
-  // 0xC0 = Program Change status nibble; low nibble is the 0-indexed
-  // channel (so the user's channel 3 becomes 2 on the wire).
-  uint8_t statusByte = static_cast<uint8_t>(0xC0 | ((m_channel - 1) & 0x0F));
-  device()->sendMidiMsg({statusByte, m_program});
+  uint8_t channelNibble = static_cast<uint8_t>((m_channel - 1) & 0x0F);
 
+  // Bank Select LSB (CC 32) first, then Program Change - the Hydrasynth
+  // picks patch N from whichever bank the last Bank Select LSB selected, so
+  // this has to land before the Program Change to take effect on it. Bank
+  // Select MSB (CC 0) is skipped: reportedly ignored by the Hydrasynth, and
+  // it only has 5 banks (A-E) so the LSB alone covers the whole range.
+  device()->sendMidiMsg({static_cast<uint8_t>(0xB0 | channelNibble), kBankSelectLsbCC, m_bank});
+  device()->sendMidiMsg({static_cast<uint8_t>(0xC0 | channelNibble), m_program});
+
+  m_lastSentBank = m_bank;
   m_lastSentProgram = m_program;
   m_dirty = true;
 
-  std::cout << "Sent Program Change: channel " << static_cast<int>(m_channel) << ", program "
-            << static_cast<int>(m_program) << std::endl;
+  std::cout << "Sent Bank Select LSB " << static_cast<int>(m_bank) << " + Program Change "
+            << static_cast<int>(m_program) << " on channel " << static_cast<int>(m_channel)
+            << std::endl;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -103,17 +118,27 @@ void ProgramChange::render()
   }
   m_dirty = false;
 
+  char bankLetter = static_cast<char>('A' + m_bank);
+
   Canvas* d0 = device()->graphicDisplay(0);
   d0->black();
   d0->putText(4, 4, "Program Change", {0xff});
   d0->putText(4, 24, ("channel " + std::to_string(static_cast<int>(m_channel))).c_str(), {0xff});
-  d0->putText(4, 44, ("program " + std::to_string(static_cast<int>(m_program))).c_str(), {0xff});
+  d0->putText(
+    4, 44, ("bank " + std::string(1, bankLetter) + "  program " + std::to_string(m_program)).c_str(), {0xff});
 
   Canvas* d1 = device()->graphicDisplay(1);
   d1->black();
-  d1->putText(4, 24,
-    m_lastSentProgram >= 0 ? ("sent: " + std::to_string(m_lastSentProgram)).c_str() : "press Select",
-    {0xff});
+  if (m_lastSentProgram >= 0)
+  {
+    char sentBankLetter = static_cast<char>('A' + m_lastSentBank);
+    d1->putText(4, 24,
+      ("sent: " + std::string(1, sentBankLetter) + std::to_string(m_lastSentProgram)).c_str(), {0xff});
+  }
+  else
+  {
+    d1->putText(4, 24, "press Select", {0xff});
+  }
   d1->putText(4, 44, m_noteHeld ? "note: ON" : "note: off", {0xff});
 }
 
