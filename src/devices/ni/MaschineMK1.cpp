@@ -211,6 +211,7 @@ enum class MaschineMK1::Button : uint8_t
 MaschineMK1::MaschineMK1()
 {
   m_leds.resize(kMASMK1_ledsDataSize);
+  m_buttons.resize(kMASMK1_buttonsDataSize);
 
   try
   {
@@ -644,15 +645,20 @@ void MaschineMK1::processMidiIn(const Transfer& input_)
 
 void MaschineMK1::processButtons(const Transfer& input_)
 {
+  std::copy(&input_[1], &input_[1 + kMASMK1_buttonsDataSize], m_buttons.begin());
+
   bool shiftPressed(isButtonPressed(input_, Button::Shift));
   m_buttonStates[static_cast<unsigned>(Button::Shift)] = shiftPressed;
 
   Device::Button changedButton(Device::Button::Unknown);
   bool buttonPressed(false);
-  if ((input_.data()[6] & 0x40) == 0)
-  {
-    return;
-  }
+
+  // Older code discarded the entire button report unless bit 0x40 in
+  // input_[6] was set. On MK1 that byte corresponds to the final button byte
+  // block (Play plus otherwise-unused bits), so using one bit there as a
+  // global validity gate suppresses legitimate button events like Browse and
+  // Navigate when that unrelated bit is clear. Process every 0x04 button
+  // packet instead.
   for (int i = 0; i < kMASMK1_buttonsDataSize; i++)
   {
     for (int k = 0; k < 8; k++)
