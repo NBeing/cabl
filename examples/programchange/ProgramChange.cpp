@@ -75,11 +75,12 @@ void ProgramChange::sendCurrentProgram()
 {
   uint8_t channelNibble = static_cast<uint8_t>((m_channel - 1) & 0x0F);
 
-  // Bank Select LSB (CC 32) first, then Program Change - the Hydrasynth
-  // picks patch N from whichever bank the last Bank Select LSB selected, so
-  // this has to land before the Program Change to take effect on it. Bank
-  // Select MSB (CC 0) is skipped: reportedly ignored by the Hydrasynth, and
-  // it only has 5 banks (A-E) so the LSB alone covers the whole range.
+  // Full Bank Select MSB+LSB pair, then Program Change. The Hydrasynth's LSB
+  // (CC 32) value is what actually picks the bank - MSB (CC 0) is reportedly
+  // ignored - but some receivers won't commit *any* bank change until both
+  // halves of the pair have arrived, so MSB is still sent (value 0) rather
+  // than skipped, in case an LSB-only message was being read as incomplete.
+  device()->sendMidiMsg({static_cast<uint8_t>(0xB0 | channelNibble), 0x00, 0x00});
   device()->sendMidiMsg({static_cast<uint8_t>(0xB0 | channelNibble), kBankSelectLsbCC, m_bank});
   device()->sendMidiMsg({static_cast<uint8_t>(0xC0 | channelNibble), m_program});
 
