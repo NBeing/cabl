@@ -26,7 +26,8 @@ void ProgramChange::initDevice()
   std::cout << "Connected. Sending on MIDI channel " << static_cast<int>(m_channel) << ".\n"
             << "Hold Erase to send a test Note On/Off (note " << static_cast<int>(kTestNote)
             << ") - basic sanity check that MIDI is reaching the synth at all.\n"
-            << "Turn encoder #" << kEncoderIndex << " to pick a program (0-127), press Select to send it.\n"
+            << "Turn encoder #" << kEncoderIndex
+            << " to pick a program (0-127), press Select or Play to send it.\n"
             << "Type 'q' and hit ENTER to quit." << std::endl;
 }
 
@@ -49,7 +50,7 @@ void ProgramChange::encoderChanged(unsigned encoder_, bool valueIncreased_, bool
 
 void ProgramChange::buttonChanged(Device::Button button_, bool buttonState_, bool /*shiftPressed_*/)
 {
-  if (button_ == Device::Button::Select && buttonState_)
+  if (buttonState_ && (button_ == Device::Button::Select || button_ == Device::Button::Play))
   {
     sendCurrentProgram();
   }
