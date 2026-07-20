@@ -8,19 +8,26 @@
 #pragma once
 
 #include <array>
-#include <string>
+#include <cstdint>
 #include <fstream>
-#include <sstream>
 #include <regex>
+#include <sstream>
+#include <string>
 
 namespace sl
 {
+namespace seq
+{
 
-// Runtime loader for Hydrasynth patch names from text file
+// Runtime loader for patch names from a text file (e.g. patchlist.txt),
+// shared by any example that wants to show a human-readable patch name
+// alongside a bank/program number. Moved here from
+// cabl/examples/programchange/ so plockseq can reuse it without an
+// example-to-example include.
 class PatchNamesLoader
 {
 public:
-  static constexpr unsigned kNumBanks = 8;      // A-H
+  static constexpr unsigned kNumBanks = 8; // A-H
   static constexpr unsigned kProgramsPerBank = 128;
   static constexpr unsigned kMaxNameLength = 64;
 
@@ -106,4 +113,5 @@ public:
   }
 };
 
+} // namespace seq
 } // namespace sl

@@ -10,12 +10,14 @@
 #include <array>
 #include <cstddef>
 #include <cabl/cabl.h>
-#include "PatchNamesLoader.h"
+#include "core/SynthProfile.h"
+#include "desktop/PatchNamesLoader.h"
 
 namespace sl
 {
 
 using namespace cabl;
+using namespace seq;
 
 // Sends MIDI out the MK1's physical MIDI OUT jack, for testing against an
 // external synth (e.g. an ASM Hydrasynth) without recompiling per patch:
@@ -35,18 +37,10 @@ public:
     Parameter,
   };
 
-  struct ParamDef
-  {
-    uint8_t cc;
-    const char* name;
-
-    constexpr ParamDef(uint8_t cc_ = 0, const char* name_ = nullptr) : cc(cc_), name(name_)
-    {
-    }
-  };
-
-  explicit ProgramChange(
-    uint8_t channel_, const std::string& patchNamesFile_ = "", Mode mode_ = Mode::Program);
+  explicit ProgramChange(uint8_t channel_,
+    const std::string& patchNamesFile_ = "",
+    Mode mode_ = Mode::Program,
+    const std::string& profilePath_ = "cabl/examples/common/profiles/hydrasynth.ccmap");
 
   void initDevice() override;
   void encoderChanged(unsigned encoder_, bool valueIncreased_, bool shiftPressed_) override;
@@ -108,7 +102,11 @@ private:
   Mode m_mode{Mode::Program};
   uint8_t m_browserBank{0};
   uint8_t m_browserProgram{0};
-  
+
+  // Runtime-loaded synth CC map (formerly the inline kHydraParams table -
+  // now shared with plockseq via cabl/examples/common/profiles/*.ccmap)
+  SynthProfile m_profile;
+
   // Runtime-loaded patch names
   PatchNamesLoader::PatchDatabase m_patches;
 };

@@ -11,54 +11,17 @@
 #include <array>
 #include <iostream>
 
-namespace
-{
-
-using ParamDef = sl::ProgramChange::ParamDef;
-
-constexpr std::array<ParamDef, 32> kHydraParams{{
-  {74, "F1 Cutoff"},
-  {71, "F1 Resonance"},
-  {50, "F1 Drive"},
-  {55, "F2 Cutoff"},
-  {56, "F2 Resonance"},
-  {44, "OSC1 Volume"},
-  {45, "OSC1 Pan"},
-  {24, "OSC1 Wavscan"},
-  {46, "OSC2 Volume"},
-  {47, "OSC2 Pan"},
-  {26, "OSC2 Wavscan"},
-  {48, "OSC3 Volume"},
-  {49, "OSC3 Pan"},
-  {81, "ENV1 Attack"},
-  {82, "ENV1 Decay"},
-  {83, "ENV1 Sustain"},
-  {84, "ENV1 Release"},
-  {72, "LFO1 Rate"},
-  {70, "LFO1 Gain"},
-  {73, "LFO2 Rate"},
-  {28, "LFO2 Gain"},
-  {16, "Macro 1"},
-  {17, "Macro 2"},
-  {18, "Macro 3"},
-  {19, "Macro 4"},
-  {20, "Macro 5"},
-  {21, "Macro 6"},
-  {22, "Macro 7"},
-  {23, "Macro 8"},
-  {91, "Reverb Mix"},
-  {92, "Delay Mix"},
-  {117, "Stereo Width"},
-}};
-
-} // namespace
+#include "desktop/SynthProfileLoader.h"
 
 namespace sl
 {
 
 //--------------------------------------------------------------------------------------------------
 
-ProgramChange::ProgramChange(uint8_t channel_, const std::string& patchNamesFile_, Mode mode_)
+ProgramChange::ProgramChange(uint8_t channel_,
+  const std::string& patchNamesFile_,
+  Mode mode_,
+  const std::string& profilePath_)
   : m_channel(channel_), m_mode(mode_)
 {
   // Try to load patch names if file is provided
@@ -68,6 +31,15 @@ ProgramChange::ProgramChange(uint8_t channel_, const std::string& patchNamesFile
     {
       std::cerr << "Warning: Could not load patch names from " << patchNamesFile_ << std::endl;
     }
+  }
+
+  // CC parameter names used to be an inline kHydraParams table here; now
+  // shared with plockseq via a single .ccmap file (see
+  // cabl/examples/common/profiles/hydrasynth.ccmap).
+  if (!SynthProfileLoader::loadFromFile(profilePath_, m_profile))
+  {
+    std::cerr << "Warning: Could not load synth CC profile from " << profilePath_
+              << " - Parameter mode will have no parameters to select." << std::endl;
   }
 
   m_browserBank = m_bank;
@@ -118,10 +90,10 @@ void ProgramChange::encoderChanged(unsigned encoder_, bool valueIncreased_, bool
   }
   else
   {
-    if (encoder_ == kParamSelectEncoder)
+    if (encoder_ == kParamSelectEncoder && !m_profile.params.empty())
     {
       int next = static_cast<int>(m_paramIndex) + (valueIncreased_ ? 1 : -1);
-      int maxIndex = static_cast<int>(kHydraParams.size() - 1);
+      int maxIndex = static_cast<int>(m_profile.params.size() - 1);
       m_paramIndex = static_cast<size_t>(std::max(0, std::min(maxIndex, next)));
     }
     else if (encoder_ == kParamValueEncoder)
@@ -329,9 +301,9 @@ void ProgramChange::keyChanged(unsigned index_, double value_, bool /*shiftPress
   else
   {
     const ParamPreset& slot = m_paramPresets[index_];
-    for (size_t i = 0; i < kHydraParams.size(); i++)
+    for (size_t i = 0; i < m_profile.params.size(); i++)
     {
-      if (kHydraParams[i].cc == slot.cc)
+      if (m_profile.params[i].cc == slot.cc)
       {
         m_paramIndex = i;
         break;
@@ -420,9 +392,14 @@ void ProgramChange::advancePatchBrowser(bool valueIncreased_)
 
 //--------------------------------------------------------------------------------------------------
 
-const ProgramChange::ParamDef& ProgramChange::selectedParam() const
+const ParamDef& ProgramChange::selectedParam() const
 {
-  return kHydraParams[m_paramIndex];
+  static const ParamDef kNoParam{0, "(no profile loaded)"};
+  if (m_profile.params.empty())
+  {
+    return kNoParam;
+  }
+  return m_profile.params[m_paramIndex];
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -553,7 +530,7 @@ void ProgramChange::render()
       {0xff},
       kFont,
       0);
-    d0->putText(4, 4 + (kLineStep * 3), param.name, {0xff}, kFont, 0);
+    d0->putText(4, 4 + (kLineStep * 3), param.name.c_str(), {0xff}, kFont, 0);
   }
 
   Canvas* d1 = device()->graphicDisplay(1);
@@ -576,7 +553,7 @@ void ProgramChange::render()
       {0xff},
       kFont,
       0);
-    d1->putText(4, 4 + kLineStep, selectedParam().name, {0xff}, kFont, 0);
+    d1->putText(4, 4 + kLineStep, selectedParam().name.c_str(), {0xff}, kFont, 0);
   }
   else
   {

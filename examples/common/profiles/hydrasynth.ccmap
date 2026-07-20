@@ -1,0 +1,40 @@
+# ASM Hydrasynth CC map
+# Extracted from the kHydraParams table that used to live inline in
+# ProgramChange.cpp (see cabl/examples/programchange). Both program-change
+# and plockseq load this same file via SynthProfileLoader, so it only needs
+# to be kept in sync with the manual in one place.
+#
+# Format: "<cc 0-127> <name>" per line, blank lines and '#' comments ignored.
+
+74	F1 Cutoff
+71	F1 Resonance
+50	F1 Drive
+55	F2 Cutoff
+56	F2 Resonance
+44	OSC1 Volume
+45	OSC1 Pan
+24	OSC1 Wavscan
+46	OSC2 Volume
+47	OSC2 Pan
+26	OSC2 Wavscan
+48	OSC3 Volume
+49	OSC3 Pan
+81	ENV1 Attack
+82	ENV1 Decay
+83	ENV1 Sustain
+84	ENV1 Release
+72	LFO1 Rate
+70	LFO1 Gain
+73	LFO2 Rate
+28	LFO2 Gain
+16	Macro 1
+17	Macro 2
+18	Macro 3
+19	Macro 4
+20	Macro 5
+21	Macro 6
+22	Macro 7
+23	Macro 8
+91	Reverb Mix
+92	Delay Mix
+117	Stereo Width

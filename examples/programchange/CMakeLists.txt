@@ -30,7 +30,7 @@ set_target_properties(
     OUTPUT_NAME_DEBUG     ${PROJECT_NAME}${DEBUG_SUFFIX}
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE cabl-static)
+target_link_libraries(${PROJECT_NAME} PRIVATE cabl-static seqlib)
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   target_link_libraries(${PROJECT_NAME} PUBLIC "-framework CoreFoundation" "-framework IOKit")

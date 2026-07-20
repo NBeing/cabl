@@ -16,11 +16,14 @@
 
 void printUsage(const char* argv0_)
 {
-  std::cout << "Usage: " << argv0_ << " [--channel N] [--patches FILE] [--mode program|parameter]\n"
+  std::cout << "Usage: " << argv0_
+            << " [--channel N] [--patches FILE] [--mode program|parameter] [--profile FILE]\n"
             << "\n"
             << "  --channel N      MIDI channel to send Program Change on, 1-16 (default: 3)\n"
             << "  --patches FILE   Path to Hydrasynth patch names file (optional)\n"
-            << "  --mode MODE      program or parameter (default: program)\n";
+            << "  --mode MODE      program or parameter (default: program)\n"
+            << "  --profile FILE   Path to a .ccmap synth CC-name file (default:\n"
+            << "                   cabl/examples/common/profiles/hydrasynth.ccmap)\n";
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -29,6 +32,7 @@ int main(int argc, const char* argv[])
 {
   uint8_t channel = 3;
   std::string patchesFile;
+  std::string profilePath = "cabl/examples/common/profiles/hydrasynth.ccmap";
   sl::ProgramChange::Mode mode = sl::ProgramChange::Mode::Program;
 
   for (int i = 1; i < argc; i++)
@@ -46,6 +50,10 @@ int main(int argc, const char* argv[])
     else if (std::strcmp(argv[i], "--patches") == 0 && i + 1 < argc)
     {
       patchesFile = argv[++i];
+    }
+    else if (std::strcmp(argv[i], "--profile") == 0 && i + 1 < argc)
+    {
+      profilePath = argv[++i];
     }
     else if (std::strcmp(argv[i], "--mode") == 0 && i + 1 < argc)
     {
@@ -71,7 +79,7 @@ int main(int argc, const char* argv[])
     }
   }
 
-  sl::ProgramChange programChange(channel, patchesFile, mode);
+  sl::ProgramChange programChange(channel, patchesFile, mode, profilePath);
 
   while (std::cin.get() != 'q')
   {
