@@ -45,6 +45,9 @@ PlockSeq::PlockSeq(uint8_t channel_,
   , m_bpm(bpm_)
 {
   m_pattern.setLanes(m_profile.params);
+
+  m_distributor.initialize();
+  m_distributor.addUIObserver(this);
   m_clock.setOnStep([this](std::size_t step_) { onStep(step_); });
 
   if (!patchNamesFile_.empty())
@@ -69,9 +72,9 @@ void PlockSeq::initDevice()
             << "Main encoder: tempo (BPM), hold Shift for fine steps.\n"
             << "BrowseLeft/BrowseRight: switch lane page.\n"
             << "PageLeft/PageRight: switch step page.\n"
-            << "GroupA-D: set pattern length to 16/32/48/64 steps.\n"
+            << "GroupA-D: set pattern length to 16/32/48/64 steps (stop playback first).\n"
             << "Play: start/stop playback.\n"
-            << "Scene+Play: save pattern. Scene+Erase: load pattern.\n"
+            << "Scene+Play: save pattern. Scene+Erase: load pattern (stop playback first).\n"
             << "Pattern file: " << m_patternFile << "\n"
             << "Type 'q' and hit ENTER to quit." << std::endl;
 
@@ -139,6 +142,10 @@ void PlockSeq::buttonChanged(Device::Button button_, bool buttonState_, bool shi
 
   if (button_ >= Device::Button::GroupA && button_ <= Device::Button::GroupD)
   {
+    if (refuseWhilePlaying("change pattern length"))
+    {
+      return;
+    }
     const uint8_t idx
       = static_cast<uint8_t>(button_) - static_cast<uint8_t>(Device::Button::GroupA);
     m_pattern.setStepCount((idx + 1) * kPadsPerPage);
@@ -253,10 +260,14 @@ void PlockSeq::togglePlay()
 
 //--------------------------------------------------------------------------------------------------
 
+// Runs on ThreadedStepClock's own thread. Only two things happen here:
+// send MIDI (device()->sendMidiMsg() is its own thread-safe queue, per
+// MaschineMK1's dedicated MIDI-out thread) and enqueue a lightweight
+// notification for the UI thread - no touching m_currentStep/m_dirty/
+// requestDeviceUpdate() directly, that's handleUIEvent()'s job once this
+// reaches the UI thread via processUIEvents().
 void PlockSeq::onStep(std::size_t stepIndex_)
 {
-  m_currentStep = stepIndex_;
-
   for (std::size_t laneIdx = 0; laneIdx < m_pattern.laneCount(); laneIdx++)
   {
     CcLockLane& lockLane = m_pattern.lane(laneIdx);
@@ -274,6 +285,23 @@ void PlockSeq::onStep(std::size_t stepIndex_)
     sendNotePulse(note);
   }
 
+  m_distributor.notifyRTObservers(
+    RTEvent(RTEventType::ClockTick, 0, static_cast<uint8_t>(stepIndex_), 0));
+}
+
+//--------------------------------------------------------------------------------------------------
+
+// Drained from processUIEvents(), called at the top of render() - so this
+// always runs on the device/UI thread, even though the event was produced
+// on the clock thread.
+void PlockSeq::handleUIEvent(const RTEvent& event_)
+{
+  if (event_.type != RTEventType::ClockTick)
+  {
+    return;
+  }
+
+  m_currentStep = event_.data1;
   m_dirty = true;
   requestDeviceUpdate();
 }
@@ -302,6 +330,11 @@ void PlockSeq::sendCc(uint8_t cc_, uint8_t value_)
 
 void PlockSeq::savePattern()
 {
+  if (refuseWhilePlaying("save pattern"))
+  {
+    return;
+  }
+
   if (PatternFileLoader::saveToFile(m_patternFile, m_pattern))
   {
     std::cout << "Saved pattern -> " << m_patternFile << std::endl;
@@ -316,6 +349,11 @@ void PlockSeq::savePattern()
 
 void PlockSeq::loadPattern()
 {
+  if (refuseWhilePlaying("load pattern"))
+  {
+    return;
+  }
+
   if (PatternFileLoader::loadFromFile(m_patternFile, m_pattern))
   {
     m_clock.setStepCount(m_pattern.stepCount());
@@ -327,6 +365,21 @@ void PlockSeq::loadPattern()
   }
   m_dirty = true;
   requestDeviceUpdate();
+}
+
+//--------------------------------------------------------------------------------------------------
+
+bool PlockSeq::refuseWhilePlaying(const char* what_) const
+{
+  if (!m_playing)
+  {
+    return false;
+  }
+  std::cout << "Stop playback before you " << what_
+            << " - it touches more than one lane at once, which isn't safe to do while the "
+               "clock thread is reading the pattern."
+            << std::endl;
+  return true;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -391,6 +444,10 @@ bool PlockSeq::stepHasAnyLock(std::size_t step_) const
 
 void PlockSeq::render()
 {
+  // Drain clock-thread notifications first - this may itself set m_dirty
+  // (a step just fired) even if nothing else changed this frame.
+  m_distributor.processUIEvents();
+
   if (!m_dirty)
   {
     return;
@@ -415,7 +472,7 @@ void PlockSeq::render()
 void PlockSeq::drawStepGrid(Canvas* canvas_)
 {
   constexpr const char* kFont = "small";
-  const std::size_t visibleStep = m_currentStep.load();
+  const std::size_t visibleStep = m_currentStep;
   const bool onScreenPlayhead = m_playing && (visibleStep / kPadsPerPage == m_stepPage);
 
   const std::string header
@@ -504,7 +561,7 @@ void PlockSeq::updatePadLeds()
   const Color kHeld(kMaxLed);
   const Color kPlayheadColor(0x40);
 
-  const std::size_t visibleStep = m_currentStep.load();
+  const std::size_t visibleStep = m_currentStep;
   const bool onScreenPlayhead = m_playing && (visibleStep / kPadsPerPage == m_stepPage);
 
   for (unsigned i = 0; i < kPadsPerPage; i++)

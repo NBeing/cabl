@@ -53,11 +53,12 @@ public:
     file << "TRIG\n";
     for (std::size_t i = 0; i < pattern_.stepCount(); i++)
     {
-      const TrigLane::Step& step = pattern_.trigLane().step(i);
-      file << i << " active=" << (step.active ? 1 : 0) << " locked=" << (step.locked ? 1 : 0)
-           << " note=" << static_cast<int>(step.value.note)
-           << " vel=" << static_cast<int>(step.value.velocity)
-           << " gate=" << static_cast<int>(step.value.gateSteps) << "\n";
+      const TrigLane& trigLane = pattern_.trigLane();
+      const NoteEvent note = trigLane.lockedValue(i);
+      file << i << " active=" << (trigLane.isActive(i) ? 1 : 0)
+           << " locked=" << (trigLane.isLocked(i) ? 1 : 0) << " note=" << static_cast<int>(note.note)
+           << " vel=" << static_cast<int>(note.velocity)
+           << " gate=" << static_cast<int>(note.gateSteps) << "\n";
     }
 
     for (std::size_t laneIdx = 0; laneIdx < pattern_.laneCount(); laneIdx++)
@@ -67,12 +68,11 @@ public:
            << "\n";
       for (std::size_t i = 0; i < pattern_.stepCount(); i++)
       {
-        const CcLane::Step& step = lockLane.lane.step(i);
-        if (!step.locked)
+        if (!lockLane.lane.isLocked(i))
         {
           continue;
         }
-        file << i << " value=" << static_cast<int>(step.value) << "\n";
+        file << i << " value=" << static_cast<int>(lockLane.lane.lockedValue(i)) << "\n";
       }
     }
 
